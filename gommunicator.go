@@ -72,7 +72,7 @@ func (gom *Gommunicator) Start(maxMessage int64, receiver chan<- *DataTransactio
 				MaxNumberOfMessages: aws.Int64(maxMessage),
 			})
 
-			if gom.errorHandler != nil {
+			if gom.errorHandler != nil && err != nil {
 				gom.errorHandler(err)
 			}
 
