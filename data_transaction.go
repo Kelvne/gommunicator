@@ -145,7 +145,7 @@ func (transaction *DataTransaction) Fail(title string) *DataTransactionResponse 
 	}
 }
 
-// Returns a new DataTransactionResponse with context appended
+// ContextResponse Returns a new DataTransactionResponse with context appended
 // Useful on internal services communication
 func (transaction *DataTransaction) ContextResponse(title string) *DataTransactionResponse {
 	return &DataTransactionResponse{
@@ -157,7 +157,7 @@ func (transaction *DataTransaction) ContextResponse(title string) *DataTransacti
 		Title:            title,
 		ActionName:       "",
 		ActionResponse:   false,
-		Context:          *transaction.context,
+		Context:          transaction.context,
 	}
 }
 
