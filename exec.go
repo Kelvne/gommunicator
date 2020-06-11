@@ -12,7 +12,7 @@ import (
 
 // Exec executes an action on the services cluster
 // It receives a DataTransactionRequest as parameter and the timeout policy in seconds
-func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (chan<- *DataTransactionResponse, error) {
+func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (<-chan *DataTransactionResponse, error) {
 	receiver := make(chan *DataTransactionResponse)
 
 	dedupUUID, err := uuid.NewRandom()
