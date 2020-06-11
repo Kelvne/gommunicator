@@ -2,64 +2,37 @@ package gommunicator
 
 import (
 	"encoding/json"
-	"fmt"
-	"regexp"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sns"
+	"github.com/google/uuid"
 )
-
-func topicArn(service string, outputs []*sns.ListTopicsOutput) *string {
-	for _, output := range outputs {
-		for _, topic := range output.Topics {
-			arn := *topic.TopicArn
-
-			match, err := regexp.Match(fmt.Sprintf("CLUSTER_%s", service), []byte(arn))
-			if err != nil {
-				continue
-			}
-			if match {
-				return topic.TopicArn
-			}
-		}
-	}
-
-	return nil
-}
 
 // Exec executes an action on the services cluster
 // It receives a DataTransactionRequest as parameter and the timeout policy in seconds
 func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (chan<- *DataTransactionResponse, error) {
 	receiver := make(chan *DataTransactionResponse)
 
-	outputs := make([]*sns.ListTopicsOutput, 0)
-	err := gom.orchestrator.ListTopicsPages(
-		&sns.ListTopicsInput{},
-		func(output *sns.ListTopicsOutput, lastPage bool) bool {
-			outputs = append(outputs, output)
-			return !lastPage
-		},
-	)
-
+	dedupUUID, err := uuid.NewRandom()
 	if err != nil {
-		return receiver, nil
+		return nil, err
 	}
 
-	arn := topicArn(data.Service, outputs)
+	data.DedupID = dedupUUID.String()
 
 	bytesMessage, err := json.Marshal(&data)
 	if err != nil {
-		return receiver, nil
+		return nil, err
 	}
 
 	message := string(bytesMessage)
 
 	now := string(time.Now().UnixNano())
 
-	gom.orchestrator.Publish(
+	_, err = gom.orchestrator.Publish(
 		&sns.PublishInput{
-			TopicArn: arn,
+			TopicArn: aws.String(gom.SNSTopicARN),
 			Message:  aws.String(message),
 			MessageAttributes: map[string]*sns.MessageAttributeValue{
 				"Timestamp": {
@@ -67,11 +40,71 @@ func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (chan<-
 					BinaryValue: []byte(now),
 					DataType:    aws.String("Number"),
 				},
+				"Service": {
+					StringValue: aws.String(data.Service),
+					BinaryValue: []byte(data.Service),
+					DataType:    aws.String("String"),
+				},
+				"Action": {
+					StringValue: aws.String(data.Action),
+					BinaryValue: []byte(data.Action),
+					DataType:    aws.String("String"),
+				},
 			},
 		},
 	)
 
+	if err != nil {
+		return nil, err
+	}
+
 	go gom.handleResponse(receiver, data, time.Duration(timeout)*time.Second)
 
 	return receiver, nil
+}
+
+// Respond reponds a DataTransactionRequest
+func (gom *Gommunicator) Respond(request *DataTransactionRequest, payload interface{}) error {
+	dt := FromRequest(request)
+	dt.data = payload
+	dt.action = nil
+
+	response := dt.Success("")
+
+	dedupUUID, err := uuid.NewRandom()
+	if err != nil {
+		return err
+	}
+
+	response.DedupID = dedupUUID.String()
+
+	bytesMessage, err := json.Marshal(&response)
+	if err != nil {
+		return err
+	}
+
+	message := string(bytesMessage)
+
+	now := string(time.Now().UnixNano())
+
+	_, err = gom.orchestrator.Publish(
+		&sns.PublishInput{
+			TopicArn: aws.String(gom.SNSTopicARN),
+			Message:  aws.String(message),
+			MessageAttributes: map[string]*sns.MessageAttributeValue{
+				"Timestamp": {
+					StringValue: aws.String(now),
+					BinaryValue: []byte(now),
+					DataType:    aws.String("Number"),
+				},
+				"Service": {
+					StringValue: aws.String(request.IncomingService),
+					BinaryValue: []byte(request.IncomingService),
+					DataType:    aws.String("String"),
+				},
+			},
+		},
+	)
+
+	return err
 }

@@ -17,17 +17,20 @@ type Gommunicator struct {
 	ServiceName string
 	// The URL which represents the SQS queue URL related to this service
 	ServiceQueueURL string
+	// The SNS Topic that will receive incoming messages
+	SNSTopicARN string
+	// The table that hold transactions statuses
+	DynamoTable string
 
 	errorHandler  func(error)
 	mq            *sqs.SQS
 	orchestrator  *sns.SNS
 	closeWildcard chan bool
 	dynamo        *dynamodb.DynamoDB
-	dynamoTable   string
 }
 
 // NewGommunicator returns a new Gommunicator using the SQS as mq using the provided AWS IAM Account ID and secret
-func NewGommunicator(serviceName, serviceQueueURL, awsID, awsSecret, dynamoTable string) *Gommunicator {
+func NewGommunicator(serviceName, serviceQueueURL, awsID, awsSecret, dynamoTable, snsTopicArn string) *Gommunicator {
 	credentials := credentials.NewStaticCredentials(awsID, awsSecret, "")
 	config := aws.NewConfig().WithCredentials(credentials)
 	awsSession := session.New(config)
@@ -38,14 +41,15 @@ func NewGommunicator(serviceName, serviceQueueURL, awsID, awsSecret, dynamoTable
 	return &Gommunicator{
 		ServiceName:     serviceName,
 		ServiceQueueURL: serviceQueueURL,
+		SNSTopicARN:     snsTopicArn,
+		DynamoTable:     dynamoTable,
 
 		mq:           sqs,
 		orchestrator: sns,
 		errorHandler: func(err error) {
 			getLogger().Error(err.Error())
 		},
-		dynamo:      dynamo,
-		dynamoTable: dynamoTable,
+		dynamo: dynamo,
 	}
 }
 

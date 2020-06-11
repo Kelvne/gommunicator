@@ -44,7 +44,7 @@ func (gom *Gommunicator) checkDT(dtID string) (*dtDocument, error) {
 				S: aws.String(dtID),
 			},
 		},
-		TableName: aws.String(gom.dynamoTable),
+		TableName: aws.String(gom.DynamoTable),
 	})
 
 	if err != nil {
@@ -77,7 +77,7 @@ func (gom *Gommunicator) createDT(dtID string) error {
 				N: aws.String(strconv.FormatInt(time.Now().UnixNano(), 10)),
 			},
 		},
-		TableName: aws.String(gom.dynamoTable),
+		TableName: aws.String(gom.DynamoTable),
 	})
 
 	return err
@@ -85,7 +85,7 @@ func (gom *Gommunicator) createDT(dtID string) error {
 
 func (gom *Gommunicator) updateDT(dtID string, status dtStatus) error {
 	_, err := gom.dynamo.UpdateItem(&dynamodb.UpdateItemInput{
-		TableName: aws.String(gom.dynamoTable),
+		TableName: aws.String(gom.DynamoTable),
 		Key: map[string]*dynamodb.AttributeValue{
 			"id": {
 				S: aws.String(dtID),

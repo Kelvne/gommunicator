@@ -40,7 +40,7 @@ func (gom *Gommunicator) handleResponse(
 
 			lenOfMessages := len(messageOutput.Messages)
 
-			if gom.errorHandler != nil {
+			if gom.errorHandler != nil && err != nil {
 				gom.errorHandler(err)
 			}
 
@@ -48,13 +48,34 @@ func (gom *Gommunicator) handleResponse(
 				for _, message := range messageOutput.Messages {
 					var response DataTransactionResponse
 
-					err := json.Unmarshal([]byte(*message.Body), &response)
+					dt, err := gom.checkDT(request.DedupID)
 					if err != nil {
+						gom.createDT(request.DedupID)
+						err := json.Unmarshal([]byte(*message.Body), &response)
+						if err != nil {
+							close(receiver)
+						}
+
+						receiver <- &response
 						close(receiver)
+						gom.updateDT(request.DedupID, completed)
 					}
 
-					receiver <- &response
-					close(receiver)
+					if dt.Status == inProgress || dt.Status == completed {
+						return
+					}
+
+					if dt.Status == errored || dt.Status == nothing {
+						gom.updateDT(request.DedupID, inProgress)
+						err := json.Unmarshal([]byte(*message.Body), &response)
+						if err != nil {
+							close(receiver)
+						}
+
+						receiver <- &response
+						close(receiver)
+						gom.updateDT(request.DedupID, completed)
+					}
 				}
 
 				close(end)

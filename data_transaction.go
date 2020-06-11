@@ -19,6 +19,10 @@ type DataTransactionRequest struct {
 	Service string `json:"service"`
 	// Action name
 	Action string `json:"action"`
+	// Prevent duplication ID
+	DedupID string `json:"dedupId"`
+	// The name of the service requesting
+	IncomingService string `json:"incomingService"`
 }
 
 // DataTransactionResponse is the response object to the services cluster
@@ -46,6 +50,8 @@ type DataTransactionResponse struct {
 	ActionID *string `json:"actionId"`
 	// DataTransaction context (metadata)
 	Context map[string]interface{} `json:"context,omitempty"`
+	// Prevent duplication ID
+	DedupID string `json:"dedupId"`
 }
 
 // DataTransaction holder for handling data transactions
@@ -191,7 +197,7 @@ func (transaction *DataTransaction) FailFromMapErr(err MapErr) *DataTransactionR
 }
 
 // Request return a valid DataTransactionRequest
-func (transaction *DataTransaction) Request(action, service string, payload interface{}) (*DataTransactionRequest, error) {
+func (transaction *DataTransaction) Request(action, service string, incomingService string, payload interface{}) (*DataTransactionRequest, error) {
 	actionUUID, err := uuid.NewRandom()
 	if err != nil {
 		return nil, err
@@ -200,10 +206,11 @@ func (transaction *DataTransaction) Request(action, service string, payload inte
 	actionID := actionUUID.String()
 
 	return &DataTransactionRequest{
-		ID:       transaction.id,
-		ActionID: &actionID,
-		Data:     payload,
-		Action:   action,
-		Service:  service,
+		ID:              transaction.id,
+		ActionID:        &actionID,
+		Data:            payload,
+		Action:          action,
+		Service:         service,
+		IncomingService: incomingService,
 	}, nil
 }

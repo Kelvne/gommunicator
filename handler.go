@@ -73,22 +73,25 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message, receiver chan<- *Da
 		return err
 	}
 
-	id := request.ID
-	if request.ActionID != nil {
-		id = *request.ActionID
-	}
-
-	dt, err := gom.checkDT(id)
+	dt, err := gom.checkDT(request.DedupID)
 	if err != nil {
-		gom.createDT(id)
+		gom.createDT(request.DedupID)
 
 		receiver <- &request
+
+		gom.updateDT(request.DedupID, completed)
+	}
+
+	if dt.Status == inProgress || dt.Status == completed {
+		return nil
 	}
 
 	if dt.Status == errored || dt.Status == nothing {
-		gom.updateDT(id, inProgress)
+		gom.updateDT(request.DedupID, inProgress)
 
 		receiver <- &request
+
+		gom.updateDT(request.DedupID, completed)
 	}
 
 	return nil
