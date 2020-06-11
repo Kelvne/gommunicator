@@ -7,7 +7,7 @@ var logger *zap.Logger
 func getLogger() *zap.Logger {
 	if logger == nil {
 		newLogger, err := zap.NewProduction()
-		defer logger.Sync()
+		defer newLogger.Sync()
 		if err != nil {
 			return nil
 		}
