@@ -1,12 +1,10 @@
 package gommunicator
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
@@ -91,10 +89,7 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message, receiver chan<- *Da
 
 			// if is not receiving a response
 			if request.IncomingService == "" {
-				ctx, cancelCtx := context.WithDeadline(context.Background(), time.Now().Add(time.Duration(request.Timeout)*time.Second))
-
-				err := callCallback(ctx, &response)
-				cancelCtx()
+				err := callCallback(&response)
 				if err != nil {
 					gom.updateDT(request.DedupID, errored)
 					return err

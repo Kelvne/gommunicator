@@ -57,10 +57,24 @@ func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (<-chan
 		return nil, err
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+
+	go func(c context.Context, r chan *DataTransactionResponse) {
+		for {
+			select {
+			case <-c.Done():
+				r <- nil
+				close(r)
+				return
+			}
+		}
+	}(ctx, receiver)
+
 	registerCallback(
 		*data.ActionID,
-		func(ctx context.Context, response *DataTransactionResponse) error {
+		func(response *DataTransactionResponse) error {
 			receiver <- response
+			cancel()
 			return ctx.Err()
 		},
 	)

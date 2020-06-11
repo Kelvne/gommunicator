@@ -1,11 +1,10 @@
 package gommunicator
 
 import (
-	"context"
 	"errors"
 )
 
-type responseCallback func(context.Context, *DataTransactionResponse) error
+type responseCallback func(*DataTransactionResponse) error
 
 var callbacks map[string]responseCallback = make(map[string]responseCallback)
 
@@ -13,11 +12,11 @@ func registerCallback(actionID string, callback responseCallback) {
 	callbacks[actionID] = callback
 }
 
-func callCallback(ctx context.Context, response *DataTransactionResponse) error {
+func callCallback(response *DataTransactionResponse) error {
 	if response.ActionID != nil {
 		if callback, ok := callbacks[*response.ActionID]; ok == true {
 			delete(callbacks, *response.ActionID)
-			return callback(ctx, response)
+			return callback(response)
 		}
 	}
 
