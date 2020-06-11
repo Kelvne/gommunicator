@@ -16,6 +16,7 @@ func registerCallback(actionID string, callback responseCallback) {
 func callCallback(ctx context.Context, response *DataTransactionResponse) error {
 	if response.ActionID != nil {
 		if callback, ok := callbacks[*response.ActionID]; ok == true {
+			delete(callbacks, *response.ActionID)
 			return callback(ctx, response)
 		}
 	}

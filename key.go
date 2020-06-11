@@ -51,6 +51,10 @@ func (gom *Gommunicator) checkDT(dtID string) (*dtDocument, error) {
 		return nil, err
 	}
 
+	if itemOutput.Item == nil {
+		return nil, nil
+	}
+
 	ts, err := strconv.ParseInt(*itemOutput.Item["timestamp"].N, 10, 64)
 	if err != nil {
 		ts = int64(0)

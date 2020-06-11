@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
@@ -73,35 +74,52 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message, receiver chan<- *Da
 
 	err := json.Unmarshal([]byte(*message.Body), &request)
 	if err != nil {
-		err = json.Unmarshal([]byte(*message.Body), &response)
-		if err != nil {
-			return err
-		}
+		return err
 	}
 
 	dt, err := gom.checkDT(request.DedupID)
-	if err != nil || dt.Status == errored || dt.Status == nothing {
+
+	if err == nil && dt == nil {
 		gom.createDT(request.DedupID)
 
+		// Check if is a action request
 		if request.ActionID != nil {
-			ctx, cancelCtx := context.WithDeadline(context.Background(), time.Now().Add(time.Duration(request.Timeout)*time.Second))
-
-			err := callCallback(ctx, &response)
-			cancelCtx()
+			err = json.Unmarshal([]byte(*message.Body), &response)
 			if err != nil {
 				return err
 			}
 
-			return nil
+			// if is not receiving a response
+			if request.IncomingService == "" {
+				ctx, cancelCtx := context.WithDeadline(context.Background(), time.Now().Add(time.Duration(request.Timeout)*time.Second))
+
+				err := callCallback(ctx, &response)
+				cancelCtx()
+				if err != nil {
+					gom.updateDT(request.DedupID, errored)
+					return err
+				}
+
+				gom.updateDT(request.DedupID, completed)
+				return nil
+			}
+
+			receiver <- &request
+
+			gom.updateDT(request.DedupID, completed)
+
+			_, err = gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
+				QueueUrl:      aws.String(gom.ServiceQueueURL),
+				ReceiptHandle: message.ReceiptHandle,
+			})
+			if err != nil {
+				gom.updateDT(request.DedupID, errored)
+			}
 		}
-
-		receiver <- &request
-
-		gom.updateDT(request.DedupID, completed)
 	}
 
-	if dt.Status == inProgress || dt.Status == completed {
-		return nil
+	if dt != nil && (dt.Status == inProgress || dt.Status == completed || err != nil || dt.Status == errored || dt.Status == nothing) {
+		return err
 	}
 
 	return nil

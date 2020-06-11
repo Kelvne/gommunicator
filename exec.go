@@ -53,6 +53,7 @@ func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (<-chan
 	)
 
 	if err != nil {
+		gom.errorHandler(err)
 		return nil, err
 	}
 

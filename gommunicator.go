@@ -38,7 +38,9 @@ func NewGommunicator(sqs *sqs.SQS, sns *sns.SNS, dynamo *dynamodb.DynamoDB, serv
 		mq:           sqs,
 		orchestrator: sns,
 		errorHandler: func(err error) {
-			getLogger().Error(err.Error())
+			if err != nil {
+				getLogger().Error(err.Error())
+			}
 		},
 		dynamo: dynamo,
 	}
@@ -79,8 +81,15 @@ func (gom *Gommunicator) Start(maxMessage int64, receiver chan<- *DataTransactio
 			wg.Add(len(messageOutput.Messages))
 
 			for _, message := range messageOutput.Messages {
-				gom.handleMessage(message, receiver)
-				wg.Done()
+				go func(m *sqs.Message, w *sync.WaitGroup) {
+					handleError := gom.handleMessage(m, receiver)
+
+					if handleError != nil {
+						gom.errorHandler(handleError)
+					}
+
+					w.Done()
+				}(message, &wg)
 			}
 
 			wg.Wait()
