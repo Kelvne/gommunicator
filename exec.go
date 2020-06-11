@@ -38,7 +38,7 @@ func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (<-chan
 			MessageAttributes: map[string]*sns.MessageAttributeValue{
 				"Timestamp": {
 					StringValue: aws.String(now),
-					DataType:    aws.String("Number"),
+					DataType:    aws.String("String"),
 				},
 				"Service": {
 					StringValue: aws.String(data.Service),
@@ -98,7 +98,7 @@ func (gom *Gommunicator) Respond(request *DataTransactionRequest, payload interf
 			MessageAttributes: map[string]*sns.MessageAttributeValue{
 				"Timestamp": {
 					StringValue: aws.String(now),
-					DataType:    aws.String("Number"),
+					DataType:    aws.String("String"),
 				},
 				"Service": {
 					StringValue: aws.String(request.IncomingService),
