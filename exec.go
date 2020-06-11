@@ -38,17 +38,14 @@ func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (<-chan
 			MessageAttributes: map[string]*sns.MessageAttributeValue{
 				"Timestamp": {
 					StringValue: aws.String(now),
-					BinaryValue: []byte(now),
 					DataType:    aws.String("Number"),
 				},
 				"Service": {
 					StringValue: aws.String(data.Service),
-					BinaryValue: []byte(data.Service),
 					DataType:    aws.String("String"),
 				},
 				"Action": {
 					StringValue: aws.String(data.Action),
-					BinaryValue: []byte(data.Action),
 					DataType:    aws.String("String"),
 				},
 			},
@@ -101,12 +98,10 @@ func (gom *Gommunicator) Respond(request *DataTransactionRequest, payload interf
 			MessageAttributes: map[string]*sns.MessageAttributeValue{
 				"Timestamp": {
 					StringValue: aws.String(now),
-					BinaryValue: []byte(now),
 					DataType:    aws.String("Number"),
 				},
 				"Service": {
 					StringValue: aws.String(request.IncomingService),
-					BinaryValue: []byte(request.IncomingService),
 					DataType:    aws.String("String"),
 				},
 			},
