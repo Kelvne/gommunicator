@@ -23,6 +23,8 @@ type DataTransactionRequest struct {
 	DedupID string `json:"dedupId"`
 	// The name of the service requesting
 	IncomingService string `json:"incomingService"`
+	// Timeout policy in seconds
+	Timeout int `json:"timeout"`
 }
 
 // DataTransactionResponse is the response object to the services cluster
@@ -197,7 +199,7 @@ func (transaction *DataTransaction) FailFromMapErr(err MapErr) *DataTransactionR
 }
 
 // Request return a valid DataTransactionRequest
-func (transaction *DataTransaction) Request(action, service string, incomingService string, payload interface{}) (*DataTransactionRequest, error) {
+func (transaction *DataTransaction) Request(action, service string, incomingService string, payload interface{}, timeout int) (*DataTransactionRequest, error) {
 	actionUUID, err := uuid.NewRandom()
 	if err != nil {
 		return nil, err
@@ -212,5 +214,6 @@ func (transaction *DataTransaction) Request(action, service string, incomingServ
 		Action:          action,
 		Service:         service,
 		IncomingService: incomingService,
+		Timeout:         timeout,
 	}, nil
 }

@@ -1,6 +1,7 @@
 package gommunicator
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 
@@ -58,7 +59,13 @@ func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (chan<-
 		return nil, err
 	}
 
-	go gom.handleResponse(receiver, data, time.Duration(timeout)*time.Second)
+	registerCallback(
+		*data.ActionID,
+		func(ctx context.Context, response *DataTransactionResponse) error {
+			receiver <- response
+			return ctx.Err()
+		},
+	)
 
 	return receiver, nil
 }

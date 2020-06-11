@@ -1,10 +1,12 @@
 package gommunicator
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
@@ -67,15 +69,31 @@ func (gom *Gommunicator) handleRawMessage(message *sqs.Message, receiver interfa
 
 func (gom *Gommunicator) handleMessage(message *sqs.Message, receiver chan<- *DataTransactionRequest) error {
 	var request DataTransactionRequest
+	var response DataTransactionResponse
 
 	err := json.Unmarshal([]byte(*message.Body), &request)
 	if err != nil {
-		return err
+		err = json.Unmarshal([]byte(*message.Body), &response)
+		if err != nil {
+			return err
+		}
 	}
 
 	dt, err := gom.checkDT(request.DedupID)
-	if err != nil {
+	if err != nil || dt.Status == errored || dt.Status == nothing {
 		gom.createDT(request.DedupID)
+
+		if request.ActionID != nil {
+			ctx, cancelCtx := context.WithDeadline(context.Background(), time.Now().Add(time.Duration(request.Timeout)*time.Second))
+
+			err := callCallback(ctx, &response)
+			cancelCtx()
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
 
 		receiver <- &request
 
@@ -84,14 +102,6 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message, receiver chan<- *Da
 
 	if dt.Status == inProgress || dt.Status == completed {
 		return nil
-	}
-
-	if dt.Status == errored || dt.Status == nothing {
-		gom.updateDT(request.DedupID, inProgress)
-
-		receiver <- &request
-
-		gom.updateDT(request.DedupID, completed)
 	}
 
 	return nil
