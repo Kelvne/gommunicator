@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/sns"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
@@ -21,15 +22,18 @@ type Gommunicator struct {
 	mq            *sqs.SQS
 	orchestrator  *sns.SNS
 	closeWildcard chan bool
+	dynamo        *dynamodb.DynamoDB
+	dynamoTable   string
 }
 
 // NewGommunicator returns a new Gommunicator using the SQS as mq using the provided AWS IAM Account ID and secret
-func NewGommunicator(serviceName, serviceQueueURL, awsID, awsSecret string) *Gommunicator {
+func NewGommunicator(serviceName, serviceQueueURL, awsID, awsSecret, dynamoTable string) *Gommunicator {
 	credentials := credentials.NewStaticCredentials(awsID, awsSecret, "")
 	config := aws.NewConfig().WithCredentials(credentials)
 	awsSession := session.New(config)
 	sqs := sqs.New(awsSession)
 	sns := sns.New(awsSession)
+	dynamo := dynamodb.New(awsSession)
 
 	return &Gommunicator{
 		ServiceName:     serviceName,
@@ -40,6 +44,8 @@ func NewGommunicator(serviceName, serviceQueueURL, awsID, awsSecret string) *Gom
 		errorHandler: func(err error) {
 			getLogger().Error(err.Error())
 		},
+		dynamo:      dynamo,
+		dynamoTable: dynamoTable,
 	}
 }
 

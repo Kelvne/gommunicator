@@ -3,12 +3,16 @@ package gommunicator
 import (
 	"fmt"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // DataTransactionRequest is the request object to the services cluster
 type DataTransactionRequest struct {
 	// DataTransaction ID
 	ID string `json:"id"`
+	// ActionID represents the internal id for atomic internal request/response
+	ActionID *string `json:"actionId"`
 	// Payload to be read
 	Data interface{} `json:"data"`
 	// Service name
@@ -38,6 +42,8 @@ type DataTransactionResponse struct {
 	// Action name if this is an action response
 	// default is "" (an empty string)
 	ActionName string `json:"actionName,omitempty"`
+	// ActionID represents the internal id for atomic internal request/response
+	ActionID *string `json:"actionId"`
 	// DataTransaction context (metadata)
 	Context map[string]interface{} `json:"context,omitempty"`
 }
@@ -45,6 +51,7 @@ type DataTransactionResponse struct {
 // DataTransaction holder for handling data transactions
 type DataTransaction struct {
 	id       string
+	actionID *string
 	data     interface{}
 	messages []string
 	context  map[string]interface{}
@@ -55,6 +62,8 @@ type DataTransaction struct {
 func NewDataTransaction(id string) *DataTransaction {
 	return &DataTransaction{
 		id:       id,
+		action:   nil,
+		actionID: nil,
 		data:     nil,
 		messages: make([]string, 0),
 		context:  make(map[string]interface{}),
@@ -65,6 +74,7 @@ func NewDataTransaction(id string) *DataTransaction {
 func FromResponse(response *DataTransactionResponse) *DataTransaction {
 	return &DataTransaction{
 		id:       response.ID,
+		actionID: response.ActionID,
 		action:   &response.ActionName,
 		context:  response.Context,
 		data:     response.Data,
@@ -76,6 +86,7 @@ func FromResponse(response *DataTransactionResponse) *DataTransaction {
 func FromRequest(request *DataTransactionRequest) *DataTransaction {
 	return &DataTransaction{
 		id:       request.ID,
+		actionID: request.ActionID,
 		action:   &request.Action,
 		context:  make(map[string]interface{}),
 		data:     request.Data,
@@ -125,6 +136,7 @@ func (transaction *DataTransaction) Success(title string) *DataTransactionRespon
 		Data:             transaction.data,
 		Message:          transaction.GetMessage(),
 		ID:               transaction.id,
+		ActionID:         transaction.actionID,
 		Title:            title,
 		ActionName:       "",
 		ActionResponse:   false,
@@ -139,6 +151,7 @@ func (transaction *DataTransaction) Fail(title string) *DataTransactionResponse 
 		Data:             transaction.data,
 		Message:          transaction.GetMessage(),
 		ID:               transaction.id,
+		ActionID:         transaction.actionID,
 		Title:            title,
 		ActionName:       "",
 		ActionResponse:   false,
@@ -154,6 +167,7 @@ func (transaction *DataTransaction) ContextResponse(title string) *DataTransacti
 		Data:             transaction.data,
 		Message:          transaction.GetMessage(),
 		ID:               transaction.id,
+		ActionID:         transaction.actionID,
 		Title:            title,
 		ActionName:       "",
 		ActionResponse:   false,
@@ -169,6 +183,7 @@ func (transaction *DataTransaction) FailFromMapErr(err MapErr) *DataTransactionR
 		Data:             transaction.data,
 		Message:          err.GetMessage(),
 		ID:               transaction.id,
+		ActionID:         transaction.actionID,
 		Title:            string(err.GetType()),
 		ActionName:       "",
 		ActionResponse:   false,
@@ -176,11 +191,19 @@ func (transaction *DataTransaction) FailFromMapErr(err MapErr) *DataTransactionR
 }
 
 // Request return a valid DataTransactionRequest
-func (transaction *DataTransaction) Request(action, service string, payload interface{}) *DataTransactionRequest {
-	return &DataTransactionRequest{
-		ID:      transaction.id,
-		Data:    payload,
-		Action:  action,
-		Service: service,
+func (transaction *DataTransaction) Request(action, service string, payload interface{}) (*DataTransactionRequest, error) {
+	actionUUID, err := uuid.NewRandom()
+	if err != nil {
+		return nil, err
 	}
+
+	actionID := actionUUID.String()
+
+	return &DataTransactionRequest{
+		ID:       transaction.id,
+		ActionID: &actionID,
+		Data:     payload,
+		Action:   action,
+		Service:  service,
+	}, nil
 }

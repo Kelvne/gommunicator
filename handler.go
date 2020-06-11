@@ -73,7 +73,23 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message, receiver chan<- *Da
 		return err
 	}
 
-	receiver <- &request
+	id := request.ID
+	if request.ActionID != nil {
+		id = *request.ActionID
+	}
+
+	dt, err := gom.checkDT(id)
+	if err != nil {
+		gom.createDT(id)
+
+		receiver <- &request
+	}
+
+	if dt.Status == errored || dt.Status == nothing {
+		gom.updateDT(id, inProgress)
+
+		receiver <- &request
+	}
 
 	return nil
 }
