@@ -90,7 +90,11 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message, receiver chan<- *Da
 			// if is not receiving a response
 			if request.IncomingService == "" {
 				err := callCallback(&response)
-				if err != nil {
+				_, errD := gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
+					QueueUrl:      aws.String(gom.ServiceQueueURL),
+					ReceiptHandle: message.ReceiptHandle,
+				})
+				if err != nil || errD != nil {
 					gom.updateDT(request.DedupID, errored)
 					return err
 				}
