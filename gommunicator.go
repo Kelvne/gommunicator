@@ -1,7 +1,7 @@
 package gommunicator
 
 import (
-	"sync"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -20,11 +20,13 @@ type Gommunicator struct {
 	// The table that hold transactions statuses
 	DynamoTable string
 
-	errorHandler  func(error)
-	mq            *sqs.SQS
-	orchestrator  *sns.SNS
-	closeWildcard chan bool
-	dynamo        *dynamodb.DynamoDB
+	errorHandler func(error)
+	mq           *sqs.SQS
+	orchestrator *sns.SNS
+	dynamo       *dynamodb.DynamoDB
+	actions      map[string]ActionHandler
+	log          bool
+	logger       *Logger
 }
 
 // NewGommunicator returns a new Gommunicator using the SQS as mq using the provided AWS IAM Account ID and secret
@@ -37,13 +39,35 @@ func NewGommunicator(sqs *sqs.SQS, sns *sns.SNS, dynamo *dynamodb.DynamoDB, serv
 
 		mq:           sqs,
 		orchestrator: sns,
-		errorHandler: func(err error) {
-			if err != nil {
-				getLogger().Error(err.Error())
-			}
-		},
-		dynamo: dynamo,
+		errorHandler: func(err error) {},
+		dynamo:       dynamo,
+		actions:      make(map[string]ActionHandler),
+		log:          true,
+		logger:       getLogger(),
 	}
+}
+
+func (gom *Gommunicator) tryLogInfo(values ...interface{}) {
+	if gom.log {
+		gom.logger.log(true, values...)
+	}
+}
+
+func (gom *Gommunicator) tryLogErr(values ...interface{}) {
+	if gom.log {
+		gom.logger.log(false, values...)
+	}
+}
+
+func (gom *Gommunicator) onErr(err error) {
+	gom.tryLogErr(err)
+	gom.errorHandler(err)
+}
+
+// SetLogState sets the log state
+func (gom *Gommunicator) SetLogState(state bool) *Gommunicator {
+	gom.log = state
+	return gom
 }
 
 // SetErrorHandler configure the main error handler
@@ -53,59 +77,39 @@ func (gom *Gommunicator) SetErrorHandler(errorHandle func(error)) *Gommunicator 
 }
 
 // Start start listening to new messages sended to this service's queue URL
-func (gom *Gommunicator) Start(maxMessage int64, receiver chan<- *DataTransactionRequest) error {
+func (gom *Gommunicator) Start(maxMessage int64) error {
 	// TODO: check for possibility of start
 	if false {
 		return nil
 	}
 
+	gom.tryLogInfo("Gommunicator is running!", fmt.Sprintf("%s service is waiting for messages...", gom.ServiceName))
+
 	for {
-		select {
-		case <-gom.closeWildcard:
-			close(receiver)
-			return nil
-		default:
-			var wg sync.WaitGroup
+		messageOutput, err := gom.mq.ReceiveMessage(&sqs.ReceiveMessageInput{
+			QueueUrl:            &gom.ServiceQueueURL,
+			AttributeNames:      aws.StringSlice([]string{"All"}),
+			WaitTimeSeconds:     aws.Int64(0),
+			MaxNumberOfMessages: aws.Int64(maxMessage),
+		})
 
-			messageOutput, err := gom.mq.ReceiveMessage(&sqs.ReceiveMessageInput{
-				QueueUrl:            &gom.ServiceQueueURL,
-				AttributeNames:      aws.StringSlice([]string{"All"}),
-				WaitTimeSeconds:     aws.Int64(0),
-				MaxNumberOfMessages: aws.Int64(maxMessage),
-			})
+		if gom.errorHandler != nil && err != nil {
+			gom.errorHandler(err)
+			continue
+		}
 
-			if gom.errorHandler != nil && err != nil {
-				gom.errorHandler(err)
-			}
-
-			wg.Add(len(messageOutput.Messages))
-
-			for _, message := range messageOutput.Messages {
-				go func(m *sqs.Message, w *sync.WaitGroup) {
-					handleError := gom.handleMessage(m, receiver)
+		go func(output *sqs.ReceiveMessageOutput) {
+			for _, message := range output.Messages {
+				go func(m *sqs.Message) {
+					handleError := gom.handleMessage(m)
 
 					if handleError != nil {
 						gom.errorHandler(handleError)
 					}
 
-					w.Done()
-				}(message, &wg)
+					return
+				}(message)
 			}
-
-			wg.Wait()
-		}
+		}(messageOutput)
 	}
-}
-
-// StartChan start listening to new messages async and returns a receiver channel
-// ps. not safe for verifying startage
-func (gom *Gommunicator) StartChan(maxMessages int64) <-chan *DataTransactionRequest {
-	receiver := make(chan *DataTransactionRequest, maxMessages)
-	go gom.Start(maxMessages, receiver)
-	return receiver
-}
-
-// CloseChan closes the goroutine and the channel created by StartChan
-func (gom *Gommunicator) CloseChan() {
-	close(gom.closeWildcard)
 }

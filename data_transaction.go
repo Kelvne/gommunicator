@@ -3,78 +3,55 @@ package gommunicator
 import (
 	"fmt"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 // DataTransactionRequest is the request object to the services cluster
 type DataTransactionRequest struct {
-	// DataTransaction ID
-	ID string `json:"id"`
-	// ActionID represents the internal id for atomic internal request/response
-	ActionID *string `json:"actionId"`
-	// Payload to be read
-	Data interface{} `json:"data"`
-	// Service name
-	Service string `json:"service"`
-	// Action name
-	Action string `json:"action"`
-	// Prevent duplication ID
-	DedupID string `json:"dedupId"`
-	// The name of the service requesting
-	IncomingService string `json:"incomingService"`
-	// Timeout policy in seconds
-	Timeout int `json:"timeout"`
+	DedupID string `json:"dedupId"` // Prevent duplication ID
+
+	ID      string      `json:"id"`      // DataTransaction ID
+	Service string      `json:"service"` // Request to service name
+	Action  string      `json:"action"`  // Action name
+	Data    interface{} `json:"data"`    // Payload to be read
+	Timeout int         `json:"timeout"` // Timeout policy in seconds
+
+	IncomingService string  `json:"incomingService"` // The name of the service requesting
+	ActionID        *string `json:"actionId"`        // ActionID represents the internal id for atomic internal request/response
 }
 
 // DataTransactionResponse is the response object to the services cluster
 type DataTransactionResponse struct {
-	// DataTransaction ID
-	ID string `json:"id"`
-	// True if the data transaction was successful
-	Success bool `json:"success"`
-	// Message to be read
-	Message string `json:"message"`
-	// Title of the response
-	Title string `json:"title"`
-	// Payload to be read
-	Data interface{} `json:"data"`
-	// Flag that is false if this should not be handled as a data transaction
-	// default is `true`
-	ShouldHandleAsDT bool `json:"handleAsDataTransaction"`
-	// Flag that is false if this is an action response
-	// default is `false`
-	ActionResponse bool `json:"actionResponse"`
-	// Action name if this is an action response
-	// default is "" (an empty string)
-	ActionName string `json:"actionName,omitempty"`
-	// ActionID represents the internal id for atomic internal request/response
-	ActionID *string `json:"actionId"`
-	// DataTransaction context (metadata)
-	Context map[string]interface{} `json:"context,omitempty"`
-	// Prevent duplication ID
-	DedupID string `json:"dedupId"`
+	DedupID string `json:"dedupId"` // Prevent duplication ID
+
+	ID      string      `json:"id"`      // DataTransaction ID
+	Action  string      `json:"action"`  // Action name
+	Success bool        `json:"success"` // True if the data transaction was successful
+	Title   string      `json:"title"`   // Title of the response
+	Message string      `json:"message"` // Message to be read
+	Data    interface{} `json:"data"`    // Payload to be read
+
+	ActionID *string `json:"actionId"` // ActionID represents the internal id for atomic internal request/response
 }
 
 // DataTransaction holder for handling data transactions
 type DataTransaction struct {
 	id       string
-	actionID *string
-	data     interface{}
+	action   string
 	messages []string
-	context  map[string]interface{}
-	action   *string
+	data     interface{}
+
+	actionID *string
 }
 
 // NewDataTransaction returns a new DataTransaction object
-func NewDataTransaction(id string) *DataTransaction {
+func NewDataTransaction(id, action string) *DataTransaction {
 	return &DataTransaction{
 		id:       id,
-		action:   nil,
-		actionID: nil,
-		data:     nil,
+		action:   action,
 		messages: make([]string, 0),
-		context:  make(map[string]interface{}),
+		data:     nil,
+
+		actionID: nil,
 	}
 }
 
@@ -82,11 +59,11 @@ func NewDataTransaction(id string) *DataTransaction {
 func FromResponse(response *DataTransactionResponse) *DataTransaction {
 	return &DataTransaction{
 		id:       response.ID,
-		actionID: response.ActionID,
-		action:   &response.ActionName,
-		context:  response.Context,
-		data:     response.Data,
+		action:   response.Action,
 		messages: strings.Split(response.Message, "\n"),
+		data:     response.Data,
+
+		actionID: response.ActionID,
 	}
 }
 
@@ -95,8 +72,7 @@ func FromRequest(request *DataTransactionRequest) *DataTransaction {
 	return &DataTransaction{
 		id:       request.ID,
 		actionID: request.ActionID,
-		action:   &request.Action,
-		context:  make(map[string]interface{}),
+		action:   request.Action,
 		data:     request.Data,
 		messages: make([]string, 0),
 	}
@@ -104,7 +80,7 @@ func FromRequest(request *DataTransactionRequest) *DataTransaction {
 
 // SetAction sets the action of this request is representing
 func (transaction *DataTransaction) SetAction(action string) *DataTransaction {
-	transaction.action = &action
+	transaction.action = action
 	return transaction
 }
 
@@ -112,17 +88,6 @@ func (transaction *DataTransaction) SetAction(action string) *DataTransaction {
 func (transaction *DataTransaction) AddMessage(message string) *DataTransaction {
 	transaction.messages = append(transaction.messages, message)
 	return transaction
-}
-
-// AddToContext adds a new context attribute to the DataTransaction
-func (transaction *DataTransaction) AddToContext(key string, value interface{}) *DataTransaction {
-	transaction.context[key] = value
-	return transaction
-}
-
-// GetContext returns the context of the DataTransaction
-func (transaction *DataTransaction) GetContext() map[string]interface{} {
-	return transaction.context
 }
 
 // GetMessage returns the main message of the DataTransaction
@@ -139,81 +104,38 @@ func (transaction *DataTransaction) GetMessage() string {
 // Success return a valid successful DataTransactionResponse
 func (transaction *DataTransaction) Success(title string) *DataTransactionResponse {
 	return &DataTransactionResponse{
-		Success:          true,
-		ShouldHandleAsDT: true,
-		Data:             transaction.data,
-		Message:          transaction.GetMessage(),
-		ID:               transaction.id,
-		ActionID:         transaction.actionID,
-		Title:            title,
-		ActionName:       "",
-		ActionResponse:   false,
+		Success:  true,
+		Data:     transaction.data,
+		Message:  transaction.GetMessage(),
+		ID:       transaction.id,
+		ActionID: transaction.actionID,
+		Title:    title,
+		Action:   transaction.action,
 	}
 }
 
 // Fail return a valid failed DataTransactionResponse
 func (transaction *DataTransaction) Fail(title string) *DataTransactionResponse {
 	return &DataTransactionResponse{
-		Success:          false,
-		ShouldHandleAsDT: true,
-		Data:             transaction.data,
-		Message:          transaction.GetMessage(),
-		ID:               transaction.id,
-		ActionID:         transaction.actionID,
-		Title:            title,
-		ActionName:       "",
-		ActionResponse:   false,
-	}
-}
-
-// ContextResponse Returns a new DataTransactionResponse with context appended
-// Useful on internal services communication
-func (transaction *DataTransaction) ContextResponse(title string) *DataTransactionResponse {
-	return &DataTransactionResponse{
-		Success:          true,
-		ShouldHandleAsDT: true,
-		Data:             transaction.data,
-		Message:          transaction.GetMessage(),
-		ID:               transaction.id,
-		ActionID:         transaction.actionID,
-		Title:            title,
-		ActionName:       "",
-		ActionResponse:   false,
-		Context:          transaction.context,
+		Success:  false,
+		Data:     transaction.data,
+		Message:  transaction.GetMessage(),
+		ID:       transaction.id,
+		ActionID: transaction.actionID,
+		Title:    title,
+		Action:   transaction.action,
 	}
 }
 
 // FailFromMapErr return a valid failed DataTransactionResponse
 func (transaction *DataTransaction) FailFromMapErr(err MapErr) *DataTransactionResponse {
 	return &DataTransactionResponse{
-		Success:          false,
-		ShouldHandleAsDT: true,
-		Data:             transaction.data,
-		Message:          err.GetMessage(),
-		ID:               transaction.id,
-		ActionID:         transaction.actionID,
-		Title:            string(err.GetType()),
-		ActionName:       "",
-		ActionResponse:   false,
+		Success:  false,
+		Data:     transaction.data,
+		Message:  err.GetMessage(),
+		ID:       transaction.id,
+		ActionID: transaction.actionID,
+		Title:    string(err.GetType()),
+		Action:   transaction.action,
 	}
-}
-
-// Request return a valid DataTransactionRequest
-func (transaction *DataTransaction) Request(action, service string, incomingService string, payload interface{}, timeout int) (*DataTransactionRequest, error) {
-	actionUUID, err := uuid.NewRandom()
-	if err != nil {
-		return nil, err
-	}
-
-	actionID := actionUUID.String()
-
-	return &DataTransactionRequest{
-		ID:              transaction.id,
-		ActionID:        &actionID,
-		Data:            payload,
-		Action:          action,
-		Service:         service,
-		IncomingService: incomingService,
-		Timeout:         timeout,
-	}, nil
 }

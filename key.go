@@ -10,7 +10,7 @@ import (
 
 type dtStatus string
 
-func statusToStr(input string) dtStatus {
+func statusFromString(input string) dtStatus {
 	switch input {
 	case "IN_PROGRESS":
 		return inProgress
@@ -62,7 +62,7 @@ func (gom *Gommunicator) checkDT(dtID string) (*dtDocument, error) {
 
 	return &dtDocument{
 		ID:        *itemOutput.Item["id"].S,
-		Status:    statusToStr(*itemOutput.Item["status"].S),
+		Status:    statusFromString(*itemOutput.Item["status"].S),
 		Timestamp: ts,
 	}, nil
 }

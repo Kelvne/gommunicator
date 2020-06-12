@@ -2,129 +2,113 @@ package gommunicator
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"reflect"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
-func isChannel(data interface{}) (is bool, channelType reflect.Type) {
-	channelType = reflect.TypeOf(data)
-	is = channelType.Kind() == reflect.Chan
-	return
+func handlerErr(id, action, incoming, service string) string {
+	return formatWithID(
+		id,
+		"data transaction id",
+		fmt.Sprintf("Data transaction request errored on %s.%s from %s", action, service, incoming),
+	)
 }
 
-func typeOfChannelEntity(channel interface{}) (reflect.Type, error) {
-	is, channelType := isChannel(channel)
-
-	if !is {
-		return nil, errors.New("receiver is not a channel")
-	}
-
-	elemType := channelType.Elem()
-
-	return elemType, nil
+func handlerRequestSuccess(id, action, incoming, service string) string {
+	return formatWithID(
+		id,
+		"data transaction id",
+		fmt.Sprintf("Data transaction request received on %s.%s from %s", action, service, incoming),
+	)
 }
 
-func unmarshalToEntityType(incomingData string, entityType reflect.Type) (*reflect.Value, error) {
-	data := reflect.New(entityType).Interface()
-
-	err := json.Unmarshal([]byte(incomingData), &data)
-	if err != nil {
-		return nil, fmt.Errorf("not convertible to type %s. json: %s, err: %ss", entityType.Name(), incomingData, err.Error())
-	}
-
-	valueOf := reflect.ValueOf(data)
-	return &valueOf, nil
+func handlerSuccessResponse(id, action string) string {
+	return formatWithID(
+		id,
+		"data transaction id",
+		fmt.Sprintf("Data transaction success internal response read from action %s", action),
+	)
 }
 
-func sendDataToChannel(data reflect.Value, receiver interface{}) error {
-	if is, _ := isChannel(receiver); !is {
-		return errors.New("receiver is not a channel")
-	}
-
-	channel := reflect.ValueOf(receiver)
-	channel.Send(data)
-	return nil
-}
-
-func (gom *Gommunicator) handleRawMessage(message *sqs.Message, receiver interface{}) error {
-	elemType, err := typeOfChannelEntity(receiver)
-	if err != nil {
-		return err
-	}
-
-	data, err := unmarshalToEntityType(*message.Body, elemType)
-	if err != nil {
-		return err
-	}
-
-	sendDataToChannel(data.Elem(), receiver)
-
-	return nil
-}
-
-func (gom *Gommunicator) handleMessage(message *sqs.Message, receiver chan<- *DataTransactionRequest) error {
-	var request DataTransactionRequest
-	var response DataTransactionResponse
-
-	err := json.Unmarshal([]byte(*message.Body), &request)
-	if err != nil {
-		return err
-	}
-
-	dt, err := gom.checkDT(request.DedupID)
+func (gom *Gommunicator) handleDuplicated(dupID string) (*dtDocument, error) {
+	// check for dynamodb request state
+	dt, err := gom.checkDT(dupID)
 
 	if err == nil && dt == nil {
-		gom.createDT(request.DedupID)
+		gom.createDT(dupID)
+	}
 
-		// Check if is a action request
-		if request.ActionID != nil {
-			err = json.Unmarshal([]byte(*message.Body), &response)
-			if err != nil {
-				return err
-			}
+	return dt, err
+}
 
-			// if is not receiving a response
-			if request.IncomingService == "" {
-				err := callCallback(&response)
-				_, errD := gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
-					QueueUrl:      aws.String(gom.ServiceQueueURL),
-					ReceiptHandle: message.ReceiptHandle,
-				})
-				if err != nil || errD != nil {
-					gom.updateDT(request.DedupID, errored)
-					return err
-				}
+func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
+	isRequest := message.Attributes["Action"] != nil
 
-				gom.updateDT(request.DedupID, completed)
-				return nil
-			}
+	var request *DataTransactionRequest
+	var response *DataTransactionResponse
 
-			receiver <- &request
+	var errDyn error
+	var dedupID string
 
-			gom.updateDT(request.DedupID, completed)
-
+	if isRequest {
+		err := json.Unmarshal([]byte(*message.Body), request)
+		if err != nil {
 			_, err = gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
 				QueueUrl:      aws.String(gom.ServiceQueueURL),
 				ReceiptHandle: message.ReceiptHandle,
 			})
-			if err != nil {
-				gom.updateDT(request.DedupID, errored)
-			}
+			return err
 		}
+		dedupID = request.DedupID
+	} else {
+		err := json.Unmarshal([]byte(*message.Body), response)
+		if err != nil {
+			_, err = gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
+				QueueUrl:      aws.String(gom.ServiceQueueURL),
+				ReceiptHandle: message.ReceiptHandle,
+			})
+			return err
+		}
+		dedupID = response.DedupID
 	}
 
-	if dt != nil && (dt.Status == inProgress || dt.Status == completed || err != nil || dt.Status == errored || dt.Status == nothing) {
-		_, err = gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
-			QueueUrl:      aws.String(gom.ServiceQueueURL),
-			ReceiptHandle: message.ReceiptHandle,
-		})
-		return err
+	_, errDyn = gom.handleDuplicated(dedupID)
+
+	if errDyn == nil {
+		if isRequest {
+			err := gom.CallAction(request)
+
+			if err != nil {
+				gom.updateDT(dedupID, errored)
+				gom.tryLogErr(handlerErr(request.ID, request.Action, request.Service, request.IncomingService))
+			} else {
+				gom.updateDT(dedupID, completed)
+				gom.tryLogInfo(handlerRequestSuccess(request.ID, request.Action, request.Service, request.IncomingService))
+			}
+		} else {
+			err := callCallback(response)
+			if err == nil {
+				gom.tryLogInfo(handlerSuccessResponse(response.ID, response.Action))
+			}
+
+			_, errD := gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
+				QueueUrl:      aws.String(gom.ServiceQueueURL),
+				ReceiptHandle: message.ReceiptHandle,
+			})
+			if err != nil || errD != nil {
+				gom.updateDT(request.DedupID, errored)
+			} else {
+				gom.updateDT(request.DedupID, completed)
+			}
+		}
+	} else {
+		gom.updateDT(dedupID, errored)
+		gom.tryLogErr(errDyn)
 	}
-	_, err = gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
+
+	gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(gom.ServiceQueueURL),
 		ReceiptHandle: message.ReceiptHandle,
 	})

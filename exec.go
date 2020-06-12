@@ -10,42 +10,80 @@ import (
 	"github.com/google/uuid"
 )
 
+func getRequest(action, service, dtID string, incomingService string, payload interface{}, timeout int) (*DataTransactionRequest, error) {
+	actionUUID, err := uuid.NewRandom()
+	if err != nil {
+		return nil, err
+	}
+
+	actionID := actionUUID.String()
+
+	if timeout == 0 {
+		timeout = 5
+	}
+
+	return &DataTransactionRequest{
+		ID:              dtID,
+		ActionID:        &actionID,
+		Data:            payload,
+		Action:          action,
+		Service:         service,
+		IncomingService: incomingService,
+		Timeout:         timeout,
+	}, nil
+}
+
+// ExecInput input settings for an action execution
+// Timeout is not required, if omitted default timeout will be set to 5 seconds
+type ExecInput struct {
+	DataTransactionID string
+	Action            string
+	Service           string
+	Payload           interface{}
+	Timeout           int
+}
+
 // Exec executes an action on the services cluster
-// It receives a DataTransactionRequest as parameter and the timeout policy in seconds
-func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (<-chan *DataTransactionResponse, error) {
+func (gom *Gommunicator) Exec(input *ExecInput) (<-chan *DataTransactionResponse, error) {
+	// Generate request
+	request, err := getRequest(input.Action, input.Service, input.DataTransactionID, gom.ServiceName, input.Payload, input.Timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create receiver channel
+	// This is the channel that will receive a possible action's response
 	receiver := make(chan *DataTransactionResponse)
 
+	// Generate UUID to prevent duplicates
+	// This is necessary because Standard SQS may deliver duplicated messages
 	dedupUUID, err := uuid.NewRandom()
 	if err != nil {
 		return nil, err
 	}
 
-	data.DedupID = dedupUUID.String()
+	request.DedupID = dedupUUID.String()
 
-	bytesMessage, err := json.Marshal(&data)
+	// Marshal request to JSON string
+	bytesMessage, err := json.Marshal(&request)
 	if err != nil {
 		return nil, err
 	}
 
 	message := string(bytesMessage)
 
-	now := string(time.Now().UnixNano())
-
+	// Publish SNS message to Orchestrator Topic
 	_, err = gom.orchestrator.Publish(
 		&sns.PublishInput{
 			TopicArn: aws.String(gom.SNSTopicARN),
 			Message:  aws.String(message),
 			MessageAttributes: map[string]*sns.MessageAttributeValue{
-				"Timestamp": {
-					StringValue: aws.String(now),
-					DataType:    aws.String("String"),
-				},
 				"Service": {
-					StringValue: aws.String(data.Service),
+					StringValue: aws.String(input.Service),
 					DataType:    aws.String("String"),
 				},
 				"Action": {
-					StringValue: aws.String(data.Action),
+					StringValue: aws.String(input.Action),
 					DataType:    aws.String("String"),
 				},
 			},
@@ -57,7 +95,11 @@ func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (<-chan
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	// Creates a new context related to the action req/resp
+	// This context has a timeout of expected timeout + 1 second
+	// When the context is closed, the request is timed out, by closing the listener goroutine
+	// 	and no further response to this action will be handled
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(input.Timeout)*time.Second)
 
 	go func(c context.Context, r chan *DataTransactionResponse, actionID string) {
 		for {
@@ -69,10 +111,12 @@ func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (<-chan
 				return
 			}
 		}
-	}(ctx, receiver, *data.ActionID)
+	}(ctx, receiver, *request.ActionID)
 
+	// Register a new response callback
+	// This is the callback that will run when a response is received
 	registerCallback(
-		*data.ActionID,
+		*request.ActionID,
 		func(response *DataTransactionResponse) error {
 			receiver <- response
 			cancel()
@@ -83,11 +127,10 @@ func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (<-chan
 	return receiver, nil
 }
 
-// Respond reponds a DataTransactionRequest
+// Respond sends a response to a DataTransactionRequest
 func (gom *Gommunicator) Respond(request *DataTransactionRequest, payload interface{}) error {
 	dt := FromRequest(request)
 	dt.data = payload
-	dt.action = nil
 
 	response := dt.Success("")
 
@@ -105,17 +148,11 @@ func (gom *Gommunicator) Respond(request *DataTransactionRequest, payload interf
 
 	message := string(bytesMessage)
 
-	now := string(time.Now().UnixNano())
-
 	_, err = gom.orchestrator.Publish(
 		&sns.PublishInput{
 			TopicArn: aws.String(gom.SNSTopicARN),
 			Message:  aws.String(message),
 			MessageAttributes: map[string]*sns.MessageAttributeValue{
-				"Timestamp": {
-					StringValue: aws.String(now),
-					DataType:    aws.String("String"),
-				},
 				"Service": {
 					StringValue: aws.String(request.IncomingService),
 					DataType:    aws.String("String"),
