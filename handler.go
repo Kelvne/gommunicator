@@ -118,8 +118,16 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message, receiver chan<- *Da
 	}
 
 	if dt != nil && (dt.Status == inProgress || dt.Status == completed || err != nil || dt.Status == errored || dt.Status == nothing) {
+		_, err = gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
+			QueueUrl:      aws.String(gom.ServiceQueueURL),
+			ReceiptHandle: message.ReceiptHandle,
+		})
 		return err
 	}
+	_, err = gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
+		QueueUrl:      aws.String(gom.ServiceQueueURL),
+		ReceiptHandle: message.ReceiptHandle,
+	})
 
 	return nil
 }
