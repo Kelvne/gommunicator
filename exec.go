@@ -91,7 +91,7 @@ func (gom *Gommunicator) Exec(input *ExecInput) (<-chan *DataTransactionResponse
 	)
 
 	if err != nil {
-		gom.errorHandler(err)
+		gom.onErr(err)
 		return nil, err
 	}
 

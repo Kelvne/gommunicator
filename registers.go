@@ -14,7 +14,7 @@ func (gom *Gommunicator) CallAction(request *DataTransactionRequest) error {
 	if callback, ok := gom.actions[request.Action]; ok == true {
 		err := callback(request)
 		if err != nil {
-			gom.errorHandler(err)
+			gom.onErr(err)
 			return err
 		}
 	}

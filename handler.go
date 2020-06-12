@@ -2,6 +2,7 @@ package gommunicator
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -43,19 +44,41 @@ func (gom *Gommunicator) handleDuplicated(dupID string) (*dtDocument, error) {
 	return dt, err
 }
 
-func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
-	isRequest := message.Attributes["Action"] != nil
+func (gom *Gommunicator) deleteMessage(message *sqs.Message) error {
+	_, err := gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
+		QueueUrl:      aws.String(gom.ServiceQueueURL),
+		ReceiptHandle: message.ReceiptHandle,
+	})
+	return err
+}
 
-	var request *DataTransactionRequest
-	var response *DataTransactionResponse
+func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
+	var raw map[string]interface{}
+
+	err := json.Unmarshal([]byte(*message.Body), &raw)
+	if err != nil {
+		gom.deleteMessage(message)
+		return err
+	}
+
+	rawMessage, hasMsg := raw["Message"].(string)
+	_, isRequest := raw["MessageAttributes"].(map[string]interface{})["Action"]
+
+	if !hasMsg {
+		gom.deleteMessage(message)
+		return errors.New("empty message")
+	}
+
+	request := new(DataTransactionRequest)
+	response := new(DataTransactionResponse)
 
 	var errDyn error
 	var dedupID string
 
 	if isRequest {
-		err := json.Unmarshal([]byte(*message.Body), request)
+		err := json.Unmarshal([]byte(rawMessage), request)
 		if err != nil {
-			_, err = gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
+			gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
 				QueueUrl:      aws.String(gom.ServiceQueueURL),
 				ReceiptHandle: message.ReceiptHandle,
 			})
@@ -63,9 +86,9 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
 		}
 		dedupID = request.DedupID
 	} else {
-		err := json.Unmarshal([]byte(*message.Body), response)
+		err := json.Unmarshal([]byte(rawMessage), response)
 		if err != nil {
-			_, err = gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
+			gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
 				QueueUrl:      aws.String(gom.ServiceQueueURL),
 				ReceiptHandle: message.ReceiptHandle,
 			})

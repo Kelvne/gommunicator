@@ -61,7 +61,7 @@ func (gom *Gommunicator) tryLogErr(values ...interface{}) {
 
 func (gom *Gommunicator) onErr(err error) {
 	gom.tryLogErr(err)
-	gom.errorHandler(err)
+	gom.onErr(err)
 }
 
 // SetLogState sets the log state
@@ -83,7 +83,8 @@ func (gom *Gommunicator) Start(maxMessage int64) error {
 		return nil
 	}
 
-	gom.tryLogInfo("Gommunicator is running!", fmt.Sprintf("%s service is waiting for messages...", gom.ServiceName))
+	gom.tryLogInfo("Gommunicator is running!")
+	gom.tryLogInfo(fmt.Sprintf("%s service is waiting for messages...", gom.ServiceName))
 
 	for {
 		messageOutput, err := gom.mq.ReceiveMessage(&sqs.ReceiveMessageInput{
@@ -94,22 +95,24 @@ func (gom *Gommunicator) Start(maxMessage int64) error {
 		})
 
 		if gom.errorHandler != nil && err != nil {
-			gom.errorHandler(err)
+			gom.onErr(err)
 			continue
 		}
 
-		go func(output *sqs.ReceiveMessageOutput) {
-			for _, message := range output.Messages {
-				go func(m *sqs.Message) {
-					handleError := gom.handleMessage(m)
+		if len(messageOutput.Messages) > 0 {
+			go func(output *sqs.ReceiveMessageOutput) {
+				for _, message := range output.Messages {
+					go func(m *sqs.Message) {
+						handleError := gom.handleMessage(m)
 
-					if handleError != nil {
-						gom.errorHandler(handleError)
-					}
+						if handleError != nil {
+							gom.onErr(handleError)
+						}
 
-					return
-				}(message)
-			}
-		}(messageOutput)
+						return
+					}(message)
+				}
+			}(messageOutput)
+		}
 	}
 }
