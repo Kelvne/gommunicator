@@ -76,7 +76,7 @@ func (gom *Gommunicator) Exec(data *DataTransactionRequest, timeout int) (<-chan
 		func(response *DataTransactionResponse) error {
 			receiver <- response
 			cancel()
-			return ctx.Err()
+			return nil
 		},
 	)
 
