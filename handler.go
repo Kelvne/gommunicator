@@ -53,11 +53,12 @@ func (gom *Gommunicator) deleteMessage(message *sqs.Message) error {
 }
 
 func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
+	gom.deleteMessage(message)
+
 	var raw map[string]interface{}
 
 	err := json.Unmarshal([]byte(*message.Body), &raw)
 	if err != nil {
-		gom.deleteMessage(message)
 		return err
 	}
 
@@ -65,7 +66,6 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
 	_, isRequest := raw["MessageAttributes"].(map[string]interface{})["Action"]
 
 	if !hasMsg {
-		gom.deleteMessage(message)
 		return errors.New("empty message")
 	}
 
@@ -78,20 +78,12 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
 	if isRequest {
 		err := json.Unmarshal([]byte(rawMessage), request)
 		if err != nil {
-			gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
-				QueueUrl:      aws.String(gom.ServiceQueueURL),
-				ReceiptHandle: message.ReceiptHandle,
-			})
 			return err
 		}
 		dedupID = request.DedupID
 	} else {
 		err := json.Unmarshal([]byte(rawMessage), response)
 		if err != nil {
-			gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
-				QueueUrl:      aws.String(gom.ServiceQueueURL),
-				ReceiptHandle: message.ReceiptHandle,
-			})
 			return err
 		}
 		dedupID = response.DedupID
@@ -101,6 +93,7 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
 
 	if errDyn == nil {
 		if isRequest {
+			gom.tryLogInfo(handlerRequestSuccess(request.ID, request.Action, request.Service, request.IncomingService))
 			err := gom.CallAction(request)
 
 			if err != nil {
@@ -108,7 +101,6 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
 				gom.tryLogErr(handlerErr(request.ID, request.Action, request.Service, request.IncomingService))
 			} else {
 				gom.updateDT(dedupID, completed)
-				gom.tryLogInfo(handlerRequestSuccess(request.ID, request.Action, request.Service, request.IncomingService))
 			}
 		} else {
 			err := callCallback(response)
@@ -116,10 +108,6 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
 				gom.tryLogInfo(handlerSuccessResponse(response.ID, response.Action))
 			}
 
-			_, errD := gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
-				QueueUrl:      aws.String(gom.ServiceQueueURL),
-				ReceiptHandle: message.ReceiptHandle,
-			})
 			if err != nil || errD != nil {
 				gom.updateDT(request.DedupID, errored)
 			} else {
@@ -130,11 +118,6 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
 		gom.updateDT(dedupID, errored)
 		gom.tryLogErr(errDyn)
 	}
-
-	gom.mq.DeleteMessage(&sqs.DeleteMessageInput{
-		QueueUrl:      aws.String(gom.ServiceQueueURL),
-		ReceiptHandle: message.ReceiptHandle,
-	})
 
 	return nil
 }

@@ -111,6 +111,7 @@ func (gom *Gommunicator) Start(maxMessage int64) error {
 
 						return
 					}(message)
+					return
 				}
 			}(messageOutput)
 		}
