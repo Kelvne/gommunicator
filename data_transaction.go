@@ -3,8 +3,6 @@ package gommunicator
 import (
 	"fmt"
 	"strings"
-
-	"github.com/kelvne/gommunicator/deco"
 )
 
 // DataTransactionRequest is the request object to the services cluster
@@ -32,7 +30,7 @@ type DataTransactionRequest struct {
 // 	base := new(Base)
 // 	dto.Decode(base)
 func (dt *DataTransactionRequest) Decode(incoming interface{}) error {
-	return deco.DecodeRequest(dt, incoming)
+	return DecodeRequest(dt, incoming)
 }
 
 // DataTransactionResponse is the response object to the services cluster
@@ -60,7 +58,7 @@ type DataTransactionResponse struct {
 // 	base := new(Base)
 // 	dto.Decode(base)
 func (dt *DataTransactionResponse) Decode(incoming interface{}) error {
-	return deco.DecodeResponse(dt, incoming)
+	return DecodeResponse(dt, incoming)
 }
 
 // DataTransaction holder for handling data transactions

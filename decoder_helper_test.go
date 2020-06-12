@@ -1,10 +1,8 @@
-package deco
+package gommunicator
 
 import (
 	"reflect"
 	"testing"
-
-	"github.com/kelvne/gommunicator"
 )
 
 func fDecode(t *testing.T, err error) {
@@ -20,7 +18,7 @@ type Expected struct {
 }
 
 func TestDecodeRequest(t *testing.T) {
-	rq := gommunicator.DataTransactionRequest{
+	rq := DataTransactionRequest{
 		Data: map[string]interface{}{
 			"msg": "hello",
 		},
@@ -37,7 +35,7 @@ func TestDecodeRequest(t *testing.T) {
 		fDecodeValue(t, rq.Data.(map[string]interface{})["msg"])
 	}
 
-	rq = gommunicator.DataTransactionRequest{}
+	rq = DataTransactionRequest{}
 	var x *string
 
 	err = DecodeRequest(&rq, x)
@@ -58,7 +56,7 @@ func TestDecodeRequest(t *testing.T) {
 }
 
 func TestDecodeSlice(t *testing.T) {
-	rq := gommunicator.DataTransactionRequest{
+	rq := DataTransactionRequest{
 		Data: []map[string]interface{}{
 			map[string]interface{}{
 				"msg": "hello from slice",

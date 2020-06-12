@@ -1,12 +1,10 @@
-package deco
+package gommunicator
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
-
-	"github.com/kelvne/gommunicator"
 )
 
 func decode(data interface{}, incoming interface{}) error {
@@ -76,11 +74,11 @@ func decode(data interface{}, incoming interface{}) error {
 }
 
 // DecodeRequest decodes the data of a request to a incoming struct or slice of
-func DecodeRequest(dt *gommunicator.DataTransactionRequest, incoming interface{}) error {
+func DecodeRequest(dt *DataTransactionRequest, incoming interface{}) error {
 	return decode(dt.Data, incoming)
 }
 
 // DecodeResponse decodes the data of a response to a incoming struct or slice of
-func DecodeResponse(dt *gommunicator.DataTransactionResponnse, incoming interface{}) error {
+func DecodeResponse(dt *DataTransactionResponnse, incoming interface{}) error {
 	return decode(dt.Data, incoming)
 }
