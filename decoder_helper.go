@@ -79,6 +79,6 @@ func DecodeRequest(dt *DataTransactionRequest, incoming interface{}) error {
 }
 
 // DecodeResponse decodes the data of a response to a incoming struct or slice of
-func DecodeResponse(dt *DataTransactionResponnse, incoming interface{}) error {
+func DecodeResponse(dt *DataTransactionResponse, incoming interface{}) error {
 	return decode(dt.Data, incoming)
 }
