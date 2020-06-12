@@ -3,6 +3,8 @@ package gommunicator
 import (
 	"fmt"
 	"strings"
+
+	"github.com/kelvne/gommunicator/deco"
 )
 
 // DataTransactionRequest is the request object to the services cluster
@@ -19,6 +21,20 @@ type DataTransactionRequest struct {
 	ActionID        *string `json:"actionId"`        // ActionID represents the internal id for atomic internal request/response
 }
 
+// Decode is a helper method for transforming incoming data
+// ALWAYS SEND A INITIALIZED POINTER!
+// Ex.
+// 	type Base struct {
+//		Message string `json:"msg"`
+// 	}
+//
+// 	dto := <- dataTransactionObject
+// 	base := new(Base)
+// 	dto.Decode(base)
+func (dt *DataTransactionRequest) Decode(incoming interface{}) error {
+	return deco.DecodeRequest(dt, incoming)
+}
+
 // DataTransactionResponse is the response object to the services cluster
 type DataTransactionResponse struct {
 	DedupID string `json:"dedupId"` // Prevent duplication ID
@@ -31,6 +47,20 @@ type DataTransactionResponse struct {
 	Data    interface{} `json:"data"`    // Payload to be read
 
 	ActionID *string `json:"actionId"` // ActionID represents the internal id for atomic internal request/response
+}
+
+// Decode is a helper method for transforming incoming data
+// ALWAYS SEND A INITIALIZED POINTER!
+// Ex.
+// 	type Base struct {
+//		Message string `json:"msg"`
+// 	}
+//
+// 	dto := <- dataTransactionObject
+// 	base := new(Base)
+// 	dto.Decode(base)
+func (dt *DataTransactionResponse) Decode(incoming interface{}) error {
+	return deco.DecodeResponse(dt, incoming)
 }
 
 // DataTransaction holder for handling data transactions
