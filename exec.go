@@ -163,3 +163,38 @@ func (gom *Gommunicator) Respond(request *DataTransactionRequest, payload interf
 
 	return err
 }
+
+// RespondError sends a response to a DataTransactionRequest
+func (gom *Gommunicator) RespondError(request *DataTransactionRequest, mapErr MapErr) error {
+	dt := FromRequest(request)
+	response := dt.FailFromMapErr(mapErr)
+
+	dedupUUID, err := uuid.NewRandom()
+	if err != nil {
+		return err
+	}
+
+	response.DedupID = dedupUUID.String()
+
+	bytesMessage, err := json.Marshal(&response)
+	if err != nil {
+		return err
+	}
+
+	message := string(bytesMessage)
+
+	_, err = gom.orchestrator.Publish(
+		&sns.PublishInput{
+			TopicArn: aws.String(gom.SNSTopicARN),
+			Message:  aws.String(message),
+			MessageAttributes: map[string]*sns.MessageAttributeValue{
+				"Service": {
+					StringValue: aws.String(request.IncomingService),
+					DataType:    aws.String("String"),
+				},
+			},
+		},
+	)
+
+	return err
+}
