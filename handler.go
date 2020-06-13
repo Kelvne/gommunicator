@@ -108,7 +108,7 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
 				gom.tryLogInfo(handlerSuccessResponse(response.ID, response.Action))
 			}
 
-			if err != nil || errD != nil {
+			if err != nil {
 				gom.updateDT(request.DedupID, errored)
 			} else {
 				gom.updateDT(request.DedupID, completed)

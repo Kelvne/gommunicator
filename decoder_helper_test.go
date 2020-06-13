@@ -58,7 +58,7 @@ func TestDecodeRequest(t *testing.T) {
 func TestDecodeSlice(t *testing.T) {
 	rq := DataTransactionRequest{
 		Data: []map[string]interface{}{
-			map[string]interface{}{
+			{
 				"msg": "hello from slice",
 			},
 		},
@@ -71,7 +71,7 @@ func TestDecodeSlice(t *testing.T) {
 	}
 
 	returnE := []*Expected{
-		&Expected{
+		{
 			Message: rq.Data.([]map[string]interface{})[0]["msg"].(string),
 		},
 	}
