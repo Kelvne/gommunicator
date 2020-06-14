@@ -129,10 +129,9 @@ func (transaction *DataTransaction) GetMessage() string {
 	return message
 }
 
-// Success return a valid successful DataTransactionResponse
-func (transaction *DataTransaction) Success(title string) *DataTransactionResponse {
+func (transaction *DataTransaction) response(title string, success bool) *DataTransactionResponse {
 	return &DataTransactionResponse{
-		Success:  true,
+		Success:  success,
 		Data:     transaction.data,
 		Message:  transaction.GetMessage(),
 		ID:       transaction.id,
@@ -142,17 +141,14 @@ func (transaction *DataTransaction) Success(title string) *DataTransactionRespon
 	}
 }
 
+// Success return a valid successful DataTransactionResponse
+func (transaction *DataTransaction) Success(title string) *DataTransactionResponse {
+	return transaction.response(title, true)
+}
+
 // Fail return a valid failed DataTransactionResponse
 func (transaction *DataTransaction) Fail(title string) *DataTransactionResponse {
-	return &DataTransactionResponse{
-		Success:  false,
-		Data:     transaction.data,
-		Message:  transaction.GetMessage(),
-		ID:       transaction.id,
-		ActionID: transaction.actionID,
-		Title:    title,
-		Action:   transaction.action,
-	}
+	return transaction.response(title, false)
 }
 
 // FailFromMapErr return a valid failed DataTransactionResponse
