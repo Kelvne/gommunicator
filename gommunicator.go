@@ -100,20 +100,17 @@ func (gom *Gommunicator) Start(maxMessage int64, longPollingTime int64) error {
 		}
 
 		if len(messageOutput.Messages) > 0 {
-			go func(output *sqs.ReceiveMessageOutput) {
-				for _, message := range output.Messages {
-					go func(m *sqs.Message) {
-						handleError := gom.handleMessage(m)
+			for _, message := range messageOutput.Messages {
+				go func(m *sqs.Message) {
+					handleError := gom.handleMessage(m)
 
-						if handleError != nil {
-							gom.onErr(handleError)
-						}
+					if handleError != nil {
+						gom.onErr(handleError)
+					}
 
-						return
-					}(message)
 					return
-				}
-			}(messageOutput)
+				}(message)
+			}
 		}
 	}
 }
