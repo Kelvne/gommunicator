@@ -93,22 +93,21 @@ func (gom *Gommunicator) handleMessage(message *sqs.Message) error {
 
 	if errDyn == nil {
 		if isRequest {
-			gom.tryLogInfo(handlerRequestSuccess(request.ID, request.Action, request.Service, request.IncomingService))
+			gom.tryLogInfo(handlerRequestSuccess(request.ID, request.Action, request.IncomingService, request.Service))
 			err := gom.CallAction(request)
 
 			if err != nil {
+				gom.tryLogErr(handlerErr(request.ID, request.Action, request.IncomingService, request.Service))
 				gom.updateDT(dedupID, errored)
-				gom.tryLogErr(handlerErr(request.ID, request.Action, request.Service, request.IncomingService))
 			} else {
 				gom.updateDT(dedupID, completed)
 			}
 		} else {
+			gom.tryLogInfo(handlerSuccessResponse(response.ID, response.Action))
 			err := callCallback(response)
-			if err == nil {
-				gom.tryLogInfo(handlerSuccessResponse(response.ID, response.Action))
-			}
 
 			if err != nil {
+				gom.tryLogErr(handlerErr(request.ID, request.Action, request.IncomingService, request.Service))
 				gom.updateDT(request.DedupID, errored)
 			} else {
 				gom.updateDT(request.DedupID, completed)
