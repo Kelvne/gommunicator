@@ -77,7 +77,7 @@ func (gom *Gommunicator) SetErrorHandler(errorHandle func(error)) *Gommunicator 
 }
 
 // Start start listening to new messages sended to this service's queue URL
-func (gom *Gommunicator) Start(maxMessage int64) error {
+func (gom *Gommunicator) Start(maxMessage int64, longPollingTime int64) error {
 	// TODO: check for possibility of start
 	if false {
 		return nil
@@ -90,7 +90,7 @@ func (gom *Gommunicator) Start(maxMessage int64) error {
 		messageOutput, err := gom.mq.ReceiveMessage(&sqs.ReceiveMessageInput{
 			QueueUrl:            &gom.ServiceQueueURL,
 			AttributeNames:      aws.StringSlice([]string{"All"}),
-			WaitTimeSeconds:     aws.Int64(0),
+			WaitTimeSeconds:     aws.Int64(longPollingTime),
 			MaxNumberOfMessages: aws.Int64(maxMessage),
 		})
 
