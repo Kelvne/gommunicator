@@ -127,6 +127,23 @@ func (gom *Gommunicator) Exec(input *ExecInput) (<-chan *DataTransactionResponse
 	return receiver, nil
 }
 
+func (gom *Gommunicator) respond(message, incomingService string) error {
+	_, err := gom.orchestrator.Publish(
+		&sns.PublishInput{
+			TopicArn: aws.String(gom.SNSTopicARN),
+			Message:  aws.String(message),
+			MessageAttributes: map[string]*sns.MessageAttributeValue{
+				"Service": {
+					StringValue: aws.String(incomingService),
+					DataType:    aws.String("String"),
+				},
+			},
+		},
+	)
+
+	return err
+}
+
 // Respond sends a response to a DataTransactionRequest
 func (gom *Gommunicator) Respond(request *DataTransactionRequest, payload interface{}) error {
 	dt := FromRequest(request)
@@ -148,20 +165,7 @@ func (gom *Gommunicator) Respond(request *DataTransactionRequest, payload interf
 
 	message := string(bytesMessage)
 
-	_, err = gom.orchestrator.Publish(
-		&sns.PublishInput{
-			TopicArn: aws.String(gom.SNSTopicARN),
-			Message:  aws.String(message),
-			MessageAttributes: map[string]*sns.MessageAttributeValue{
-				"Service": {
-					StringValue: aws.String(request.IncomingService),
-					DataType:    aws.String("String"),
-				},
-			},
-		},
-	)
-
-	return err
+	return gom.respond(message, request.IncomingService)
 }
 
 // RespondError sends a response to a DataTransactionRequest
@@ -183,18 +187,5 @@ func (gom *Gommunicator) RespondError(request *DataTransactionRequest, mapErr Ma
 
 	message := string(bytesMessage)
 
-	_, err = gom.orchestrator.Publish(
-		&sns.PublishInput{
-			TopicArn: aws.String(gom.SNSTopicARN),
-			Message:  aws.String(message),
-			MessageAttributes: map[string]*sns.MessageAttributeValue{
-				"Service": {
-					StringValue: aws.String(request.IncomingService),
-					DataType:    aws.String("String"),
-				},
-			},
-		},
-	)
-
-	return err
+	return gom.respond(message, request.IncomingService)
 }
